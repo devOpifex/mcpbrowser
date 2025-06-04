@@ -3,14 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
+	"strings"
 
+	"github.com/gocolly/colly"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Define a struct for curl command arguments
-type CurlArgs struct {
+// Define a struct for browser arguments
+type BrowserArgs struct {
 	URL string `json:"url"`
 }
 
@@ -22,9 +23,9 @@ func main() {
 		server.WithToolCapabilities(true),
 	)
 
-	// Add curl tool
-	curlTool := mcp.NewTool("browser",
-		mcp.WithDescription("Retrieves content from a URL"),
+	// Add browser tool
+	browserTool := mcp.NewTool("browser",
+		mcp.WithDescription("Fetches and extracts content from a web URL. For HTML pages, returns the text content of the body. For non-HTML resources, returns the raw content. Useful for retrieving information from websites, APIs, or documents available online."),
 		mcp.WithString("url",
 			mcp.Required(),
 			mcp.Description("URL to fetch"),
@@ -32,7 +33,7 @@ func main() {
 	)
 
 	// Add tool handler
-	s.AddTool(curlTool, mcp.NewTypedToolHandler(curlHandler))
+	s.AddTool(browserTool, mcp.NewTypedToolHandler(browserHandler))
 
 	// Start the stdio server
 	fmt.Println("Starting MCP Browser server...")
@@ -41,19 +42,45 @@ func main() {
 	}
 }
 
-// Curl handler function
-func curlHandler(ctx context.Context, request mcp.CallToolRequest, args CurlArgs) (*mcp.CallToolResult, error) {
+// Browser handler function using colly
+func browserHandler(ctx context.Context, request mcp.CallToolRequest, args BrowserArgs) (*mcp.CallToolResult, error) {
 	if args.URL == "" {
 		return mcp.NewToolResultError("URL is required"), nil
 	}
 
-	// Create and execute the curl command
-	cmd := exec.Command("curl", "-s", args.URL)
-	output, err := cmd.CombinedOutput()
+	// Create a new collector
+	c := colly.NewCollector()
+
+	var content string
+	var isHTML bool
+
+	// Check if the response is HTML by inspecting Content-Type header
+	c.OnResponse(func(r *colly.Response) {
+		contentType := r.Headers.Get("Content-Type")
+		isHTML = strings.Contains(strings.ToLower(contentType), "text/html")
+
+		if !isHTML {
+			// If not HTML, return the entire content
+			content = string(r.Body)
+		}
+	})
+
+	// Extract only the body content if it's HTML
+	c.OnHTML("body", func(e *colly.HTMLElement) {
+		content = e.Text
+	})
+
+	// Handle errors
+	c.OnError(func(r *colly.Response, err error) {
+		content = fmt.Sprintf("Error fetching URL: %v", err)
+	})
+
+	// Visit the URL
+	err := c.Visit(args.URL)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Error executing curl: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Error visiting URL: %v", err)), nil
 	}
 
-	// Return the output as text
-	return mcp.NewToolResultText(string(output)), nil
+	// Return the content
+	return mcp.NewToolResultText(content), nil
 }
