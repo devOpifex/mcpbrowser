@@ -23,8 +23,8 @@ func main() {
 	)
 
 	// Add curl tool
-	curlTool := mcp.NewTool("curl",
-		mcp.WithDescription("Fetch content from a URL using curl"),
+	curlTool := mcp.NewTool("browser",
+		mcp.WithDescription("Retrieves content from a URL"),
 		mcp.WithString("url",
 			mcp.Required(),
 			mcp.Description("URL to fetch"),
@@ -57,4 +57,3 @@ func curlHandler(ctx context.Context, request mcp.CallToolRequest, args CurlArgs
 	// Return the output as text
 	return mcp.NewToolResultText(string(output)), nil
 }
-
