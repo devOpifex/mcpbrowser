@@ -36,7 +36,6 @@ func main() {
 	s.AddTool(browserTool, mcp.NewTypedToolHandler(browserHandler))
 
 	// Start the stdio server
-	fmt.Println("Starting MCP Browser server...")
 	if err := server.ServeStdio(s); err != nil {
 		fmt.Printf("Server error: %v\n", err)
 	}
